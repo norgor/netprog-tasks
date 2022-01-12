@@ -4,7 +4,7 @@ use std::thread;
 fn is_prime(v: u32) -> bool {
     if v > 1 {
         let v_sqrt = (v as f64).sqrt() as u32;
-        (2..v_sqrt).filter(|i| v % i == 0).count() == 0
+        (2..v_sqrt).any(|i| v % i == 0)
     } else {
         false
     }
