@@ -53,6 +53,10 @@ fn main() {
         start, end, threads
     );
 
+    if threads <= 0 {
+        panic!("Cannot use {} threads.", threads)
+    }
+
     let mut primes = find_primes_in_range(start, end, threads);
     print!("Primes: ");
     while primes.len() > 0 {
