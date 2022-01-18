@@ -19,7 +19,6 @@ fn find_primes(start: u32, end: u32, step: u32, tx: Sender<u32>) {
         .step_by(step as usize)
         .filter(|v| is_prime(*v))
         .for_each(|v| tx.send(v).unwrap());
-    drop(tx);
 }
 
 fn find_primes_in_range(start: u32, end: u32, threads: u32) -> BinaryHeap<Reverse<u32>> {
