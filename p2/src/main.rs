@@ -5,7 +5,6 @@ use std::thread;
 use std::time::{self, Instant};
 
 type WorkFunc = dyn FnOnce() -> () + Send;
-type WorkList = BinaryHeap<Work>;
 
 struct Work {
     func: Box<WorkFunc>,
@@ -19,6 +18,40 @@ impl Work {
         } else {
             time::Duration::ZERO
         }
+    }
+}
+
+struct WorkList {
+    heap: BinaryHeap<Work>,
+}
+impl WorkList {
+    fn new() -> WorkList {
+        WorkList {
+            heap: BinaryHeap::new(),
+        }
+    }
+
+    fn push(&mut self, work: Work) {
+        self.heap.push(work)
+    }
+
+    fn pop(&mut self) -> Option<Work> {
+        self.heap.pop()
+    }
+
+    fn len(&self) -> usize {
+        self.heap.len()
+    }
+
+    fn soonest(&self) -> time::Duration {
+        match self.heap.peek() {
+            Some(x) => x.until(),
+            None => time::Duration::MAX,
+        }
+    }
+
+    fn work_available(&self) -> bool {
+        self.soonest() == time::Duration::ZERO
     }
 }
 
@@ -108,24 +141,13 @@ impl Workers {
         self.ctx.cvar.notify_one();
     }
 
-    fn soonest_duration(list: &WorkList) -> time::Duration {
-        match list.peek() {
-            Some(x) => x.until(),
-            None => time::Duration::MAX,
-        }
-    }
-
-    fn has_no_avail_work(list: &WorkList) -> bool {
-        Workers::soonest_duration(list) > time::Duration::ZERO
-    }
-
     fn thread_work(ctx: Arc<WorkerContext>) {
         loop {
             let mut shared = ctx.shared.lock().unwrap();
-            while Workers::has_no_avail_work(&shared.work_list)
+            while !shared.work_list.work_available()
                 && (!shared.stop || shared.stop && shared.work_list.len() > 0)
             {
-                let duration = Workers::soonest_duration(&shared.work_list);
+                let duration = shared.work_list.soonest();
                 shared = ctx.cvar.wait_timeout(shared, duration).unwrap().0
             }
 
