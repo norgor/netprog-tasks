@@ -33,6 +33,7 @@ struct WorkerContext {
 }
 
 struct Workers {
+    threads: usize,
     ctx: Arc<WorkerContext>,
     handles: Vec<thread::JoinHandle<()>>,
 }
@@ -55,7 +56,7 @@ impl PartialEq for Work {
 impl Eq for Work {}
 
 impl Workers {
-    pub fn new(threads: u32) -> Workers {
+    pub fn new(threads: usize) -> Workers {
         let ctx = WorkerContext {
             cvar: Condvar::new(),
             shared: Mutex::new(SharedWorkerContext {
@@ -64,14 +65,22 @@ impl Workers {
             }),
         };
         let arc_ctx = Arc::new(ctx);
-        let handles = (0..threads)
-            .map(|_| arc_ctx.clone())
+        Workers {
+            threads,
+            ctx: arc_ctx,
+            handles: Vec::new(),
+        }
+    }
+
+    pub fn start(&mut self) {
+        let delta = self.threads - self.handles.len();
+        if delta == 0 {
+            panic!("no threads to create")
+        }
+        self.handles = (0..delta)
+            .map(|_| self.ctx.clone())
             .map(|x| thread::spawn(move || Workers::thread_work(x)))
             .collect();
-        Workers {
-            ctx: arc_ctx,
-            handles,
-        }
     }
 
     pub fn join(&mut self) {
@@ -143,6 +152,8 @@ impl Workers {
 
 fn main() {
     let mut workers = Workers::new(8);
+    workers.start();
+
     println!("Scheduling...");
     for n in 0..5 {
         workers.post_timeout(
@@ -160,6 +171,7 @@ fn main() {
         );
     }
     println!("Done Scheduling!");
+
     println!("Waiting for workers...");
     workers.join();
     println!("Done waiting!");
