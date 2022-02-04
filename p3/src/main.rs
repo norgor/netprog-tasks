@@ -1,52 +1,12 @@
-use std::collections::VecDeque;
+use std::env;
 
 use async_std::io::prelude::BufReadExt;
-use async_std::io::WriteExt;
+use async_std::io::{BufReader, WriteExt};
 use async_std::prelude::*;
 use async_std::{io, net::TcpListener, net::TcpStream, task};
 
-struct LineReader {
-    buf: [u8; 256],
-    queue: VecDeque<u8>,
-    stream: TcpStream,
-}
-
-impl LineReader {
-    pub fn new(stream: TcpStream) -> LineReader {
-        LineReader {
-            buf: [0; 256],
-            queue: VecDeque::new(),
-            stream,
-        }
-    }
-
-    pub async fn read(&mut self) -> io::Result<String> {
-        let mut bytes = 1;
-        while bytes != 0 {
-            bytes = self.stream.read(&mut self.buf).await?;
-            let offset = self.queue.len();
-            self.queue.extend(self.buf[0..bytes].iter());
-            for i in 0..bytes {
-                if self.buf[i] == '\n' as u8 {
-                    let raw = self
-                        .queue
-                        .drain(0..offset + i + 1)
-                        .take(offset + i)
-                        .collect();
-                    return match String::from_utf8(raw) {
-                        Ok(str) => Ok(str),
-                        Err(_) => Err(io::Error::new(
-                            io::ErrorKind::InvalidData,
-                            "ERROR: Invalid UTF-8".to_string(),
-                        )),
-                    };
-                }
-            }
-        }
-
-        Ok("".to_string())
-    }
-}
+const HTTP_LISTENER_ADDRESS: &str = "0.0.0.0:8080";
+const MATH_LISTENER_ADDRESS: &str = "0.0.0.0:43000";
 
 fn calculate(operator: char, lhs: f64, rhs: f64) -> f64 {
     match operator {
@@ -103,7 +63,8 @@ async fn handle_math_client(mut stream: TcpStream) -> io::Result<()> {
 }
 
 async fn run_math_server() -> io::Result<()> {
-    let listener = TcpListener::bind("0.0.0.0:43000").await?;
+    let listener = TcpListener::bind(MATH_LISTENER_ADDRESS).await?;
+    println!("Math listener running on {}", MATH_LISTENER_ADDRESS);
     let mut incoming = listener.incoming();
 
     while let Some(stream) = incoming.next().await {
@@ -149,16 +110,17 @@ async fn handle_http_client(mut stream: TcpStream) -> io::Result<()> {
     </html>\n\
     \n\
     \n";
-    let bodyBytes = body.as_bytes();
+    let body_bytes = body.as_bytes();
     stream
-        .write(format!("Content-Length: {}\n\n", bodyBytes.len()).as_bytes())
+        .write(format!("Content-Length: {}\n\n", body_bytes.len()).as_bytes())
         .await?;
-    stream.write(bodyBytes).await?;
+    stream.write(body_bytes).await?;
     return Ok(());
 }
 
 async fn run_http_server() -> io::Result<()> {
-    let listener = TcpListener::bind("0.0.0.0:8080").await?;
+    let listener = TcpListener::bind(HTTP_LISTENER_ADDRESS).await?;
+    println!("HTTP Listener running on {}", HTTP_LISTENER_ADDRESS);
     let mut incoming = listener.incoming();
 
     while let Some(stream) = incoming.next().await {
@@ -169,7 +131,7 @@ async fn run_http_server() -> io::Result<()> {
     Ok(())
 }
 
-fn main() {
+fn run_servers() {
     let mut tasks = vec![
         task::spawn(run_math_server()),
         task::spawn(run_http_server()),
@@ -177,4 +139,36 @@ fn main() {
     while tasks.len() > 0 {
         task::block_on(tasks.pop().unwrap()).unwrap();
     }
+}
+
+async fn run_math_client_async(address: String) -> io::Result<()> {
+    let mut stream = TcpStream::connect(address).await?;
+    let mut reader = BufReader::new(stream.clone());
+    let mut line = String::new();
+
+    loop {
+        io::stdin().read_line(&mut line).await?;
+        stream.write(line.as_bytes()).await?;
+        line.clear();
+        if reader.read_line(&mut line).await? == 0 {
+            break;
+        }
+        print!("{}", line);
+        line.clear();
+    }
+
+    Ok(())
+}
+
+fn run_math_client(address: String) {
+    task::block_on(run_math_client_async(address)).unwrap();
+}
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    match args[1].as_str() {
+        "-s" => run_servers(),
+        "-c" => run_math_client(args[2].clone()),
+        _ => panic!("You must specify a client/server argument (-c or -s)"),
+    };
 }
