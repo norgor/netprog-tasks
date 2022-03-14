@@ -8,7 +8,7 @@ use tempfile::NamedTempFile;
 use rocket::fs::FileServer;
 
 #[post("/run-code", data = "<code>")]
-fn hello(code: Vec<u8>) -> Vec<u8> {
+fn run_code(code: Vec<u8>) -> Vec<u8> {
     let mut file = NamedTempFile::new().unwrap();
     file.write_all(&code).unwrap();
     let string_path = file.path().to_string_lossy();
@@ -31,5 +31,5 @@ fn hello(code: Vec<u8>) -> Vec<u8> {
 fn rocket() -> _ {
     rocket::build()
         .mount("/", FileServer::from("static"))
-        .mount("/api/", routes![hello])
+        .mount("/api/", routes![run_code])
 }

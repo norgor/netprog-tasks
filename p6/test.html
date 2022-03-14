@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset='utf-8'>
+    <meta http-equiv='X-UA-Compatible' content='IE=edge'>
+    <title>Page Title</title>
+    <meta name='viewport' content='width=device-width, initial-scale=1'>
+    <link rel='stylesheet' type='text/css' media='screen' href='main.css'>
+    <script src='main.js'></script>
+</head>
+
+<body>
+
+    <form id="form">
+        <input id="input" type="text" />
+    </form>
+    <ul id="messages"></ul>
+    <script defer>
+        const messages = document.querySelector("#messages");
+        const input = document.querySelector("#input");
+
+        window.ws = new WebSocket("ws://localhost:8080/");
+        ws.onmessage = function (msg) {
+            const item = document.createElement("li");
+            item.innerText = msg.data;
+            messages.appendChild(item);
+        }
+        ws.onerror = console.error;
+        ws.onclose = () => console.log("WS CLOSED!");
+
+
+        document.querySelector("#form").addEventListener("submit", function (event) {
+            event.preventDefault();
+            ws.send(input.value);
+        })
+    </script>
+</body>
+
+</html>
