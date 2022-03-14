@@ -33,6 +33,7 @@
         document.querySelector("#form").addEventListener("submit", function (event) {
             event.preventDefault();
             ws.send(input.value);
+            input.value = "";
         })
     </script>
 </body>
